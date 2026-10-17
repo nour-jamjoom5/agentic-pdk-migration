@@ -75,9 +75,7 @@ Claim a task in Slack before starting.
 - CHIA is installed in `chia_env` on eda-1 and hello-world works.
 - CHIA's VLSI workers run directly on the host (no podman), so Hammer can see the Cadence tools, PDKs, and licenses. Podman is only for Chisel/Verilator workers.
 - CHIA's `HammerNode.run` needs a worker with a `hammer` resource in `cluster.yaml`.
-- Hammer is not installed yet; it will be installed at the pinned commit.
+- Hammer is not installed yet; install upstream `ucb-bar/hammer`.
 
 ## Open questions
-
-- Which Hammer commit should we pin (before `sky130_scl` support)?
 - What version string does the pinned Hammer expect for Pegasus 25.13 (likely `"2513"` or `"251"`)?
