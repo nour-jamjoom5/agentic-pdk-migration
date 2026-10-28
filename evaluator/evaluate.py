@@ -4,20 +4,27 @@ from pathlib import Path
 from evaluator.condense_log import condense_log
 
 def verify_artifacts(output_json_path, stage):
-    with Path(output_json_path).open() as f:
-        outputs = json.load(f)
+    output_path = Path(output_json_path)
 
-    required_keys = {
-        "syn": [
-            "synthesis.outputs.output_files",
-            "synthesis.outputs.sdc",
-        ],
-        "par": [
-            "par.outputs.output_gds",
-            "par.outputs.output_netlist",
-            "par.outputs.def_file",
-        ],
-    }
+    if not output_path.is_file():
+        return {
+            "complete": False,
+            "missing_artifacts": [str(output_path)],
+        }
+
+    with output_path.open() as f:
+        outputs = json.load(f)
+        required_keys = {
+            "syn": [
+                "synthesis.outputs.output_files",
+                "synthesis.outputs.sdc",
+            ],
+            "par": [
+                "par.outputs.output_gds",
+                "par.outputs.output_netlist",
+                "par.outputs.def_file",
+            ],
+        }
 
     missing = []
 
