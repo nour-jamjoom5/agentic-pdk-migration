@@ -1,0 +1,4 @@
+# Open-PDK baseline: cm.yml selects Calibre for DRC/LVS (not in upstream Hammer).
+# Override to the open checkers. Pass via `extra=` so it loads after cm.yml.
+vlsi.core.drc_tool: "hammer.drc.magic"
+vlsi.core.lvs_tool: "hammer.lvs.netgen"
