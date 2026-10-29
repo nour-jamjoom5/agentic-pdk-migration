@@ -42,7 +42,7 @@ Runs land in `/scratch/cs199-aau/pdk-migration/runs/<branch>/{workspace,build}` 
 
 ## Milestones
 1. ✅ verified — cluster up, `smoke.py` passes, container can't see `/home/ff`
-2. ✅ syn verified (rung 2, 38 s) / ⬜ par — `--seed-only` reproduces the GCD baseline
-3. ✅ code / ⬜ verified — `WorkspaceTool` (read/write workspace, read-only PDK roots, refuse everything else) + agent turn
-4. ✅ code / ⬜ verified — loop on a known-answer task (break `sky130A` path in the template → agent fixes → rung 0→2)
+2. ✅ verified — `--seed-only --stage par` reproduces the GCD baseline through CHIA: syn 38 s → syn-to-par → par 277 s, rung 4
+3. ✅ verified — `WorkspaceTool` (read/write workspace, read-only PDK roots, refuse everything else) + agent turn
+4. ✅ verified (2026-10-29) — loop on a known-answer task (break `sky130A` path in the template → agent fixes → rung 0→2)
 5. ⬜ real task spec + Nour's evaluator
