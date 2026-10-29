@@ -34,3 +34,21 @@ STAGES = {
 
 STAGE_TIMEOUT_S = int(os.environ.get("MIG_STAGE_TIMEOUT_S", 3 * 3600))
 # Shared EECS licenses: one flow run at a time (VLSI resource advertised = 1 on head).
+
+# ---- agent sandbox (WorkspaceTool) ----
+SKY130_COL = "/home/ff/ee198/ee198-20/sky130_col"
+READ_ONLY_ROOTS = [
+    f"{SKY130_COL}/sky130_release_0.0.9",          # Cadence PDK (migration target)
+    f"{SKY130_COL}/sky130_scl_9T_0.1.2",           # Cadence std cells
+    f"{SKY130_COL}/open_pdks-2022.10",             # open PDK (migration source)
+    f"{SKY130_COL}/sram22_sky130_macros",
+    os.path.join(os.path.dirname(HAMMER_E2E), "hammer"),   # Hammer python pkg + plugins
+    HAMMER_E2E,                                    # e2e configs (read-only)
+]
+# Substrings that are refused even inside allowed roots. Jim said "use upstream"
+# Hammer, so its sky130_cds code is NOT hidden by default; add "sky130_cds" here
+# if the team decides the agent shouldn't see it.
+DENY_SUBSTRINGS = []
+
+LLM_MODEL = os.environ.get("MIG_LLM_MODEL", "claude-sonnet-4-6")
+LLM_TIMEOUT_S = int(os.environ.get("MIG_LLM_TIMEOUT_S", 3600))

@@ -3,6 +3,7 @@
 # eda-1 setup: rootless podman via the ~/.local/bin/docker shim, SELinux :Z mounts).
 #
 #   head  (bare metal, chia_env): runs the driver + Hammer/Genus/Innovus.
+#         Also advertises head_tools=8 -> MCP tool servers (WorkspaceTool) land here.
 #         Advertises VLSI=1 -> at most ONE flow run at a time (shared licenses).
 #   llm_1 (container): Claude Code. Sees nothing from the host except its
 #         ~/.claude login mount -> it can only act through the MCP tools we pass it.
@@ -36,6 +37,10 @@ available_node_types:
                 - "-v /scratch/cs199-aau/claude_config_dir/.claude:/home/ray/.claude:Z"
             run_setup_commands:
                 - mkdir -p /home/ray/llm_env
+                # Claude Code keeps its config at ~/.claude.json, OUTSIDE the mounted ~/.claude
+                # dir, so it is missing in a fresh container. Restore the newest backup from the
+                # mount (login credentials themselves live in ~/.claude/.credentials.json).
+                - "[ -f /home/ray/.claude.json ] || cp \"$(ls -t /home/ray/.claude/backups/.claude.json.backup.* | head -1)\" /home/ray/.claude.json"
 
 min_workers: 1
 max_workers: 1
@@ -49,7 +54,7 @@ head_start_ray_commands:
     - "source ~/.bashrc && conda activate chia_env && \
         ulimit -c unlimited && \
         ray start --head --port=6379 --include-dashboard=True \
-        --dashboard-agent-listen-port=0 --resources='{\"VLSI\": 1}'"
+        --dashboard-agent-listen-port=0 --resources='{\"VLSI\": 1, \"head_tools\": 8}'"
 
 worker_start_ray_commands:
     - "ray stop"
