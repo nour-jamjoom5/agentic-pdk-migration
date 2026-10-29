@@ -1,0 +1,56 @@
+# Single-machine eda-1 cluster for the PDK-migration loop.
+# Adapted from chia/examples/timing_opt/timing_cluster.eda1.yaml (Sid's earlier
+# eda-1 setup: rootless podman via the ~/.local/bin/docker shim, SELinux :Z mounts).
+#
+#   head  (bare metal, chia_env): runs the driver + Hammer/Genus/Innovus.
+#         Advertises VLSI=1 -> at most ONE flow run at a time (shared licenses).
+#   llm_1 (container): Claude Code. Sees nothing from the host except its
+#         ~/.claude login mount -> it can only act through the MCP tools we pass it.
+cluster_name: pdk_migration
+
+provider:
+    head_ip: 128.32.42.144          # eda-1
+
+auth:
+    ssh_user: cs199-aau
+    ssh_private_key: ~/.ssh/id_ed25519
+
+available_node_types:
+    llm_1:
+        resources: {"llm": 2, "claude_creds": 2}
+        min_workers: 1
+        max_workers: 1
+        compatible_ips: [128.32.42.144]
+        docker:
+            image: "ghcr.io/ucb-bar/chia-claude-code:latest"
+            container_name: "chia-claude-code-mig-cs199-aau"
+            pull_before_run: True
+            run_options:
+                - --user 0:0
+                # claude refuses --dangerously-skip-permissions as root; IS_SANDBOX=1 is the
+                # supported bypass (same as the timing_opt eda1 config).
+                - "-e IS_SANDBOX=1"
+                - --ulimit nofile=65536:65536
+                - --shm-size=10.24gb
+                # :Z required (SELinux enforcing on eda-1). Claude login lives here.
+                - "-v /scratch/cs199-aau/claude_config_dir/.claude:/home/ray/.claude:Z"
+            run_setup_commands:
+                - mkdir -p /home/ray/llm_env
+
+min_workers: 1
+max_workers: 1
+
+head_env_commands:
+    - "source ~/.bashrc && conda activate chia_env"
+head_setup_commands:
+    - "source ~/.bashrc && conda activate chia_env"
+head_start_ray_commands:
+    - "source ~/.bashrc && conda activate chia_env && ray stop"
+    - "source ~/.bashrc && conda activate chia_env && \
+        ulimit -c unlimited && \
+        ray start --head --port=6379 --include-dashboard=True \
+        --dashboard-agent-listen-port=0 --resources='{\"VLSI\": 1}'"
+
+worker_start_ray_commands:
+    - "ray stop"
+    - "ray start --address=$RAY_HEAD_IP:6379 --dashboard-agent-listen-port=0"
