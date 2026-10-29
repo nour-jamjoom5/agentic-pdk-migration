@@ -33,7 +33,7 @@ Later: Rocket, SRAMs, I/O ring, power-on reset, level shifters.
 ## Rules
 
 - **Keep the reference out.** No reference slides, hooks, or configs in this repo or the agent's workspace. Existing tapeout Chipyard checkouts (e.g. `ucb-eecs151tapeout`) and CHIA's `examples/sky130_vlsi` already contain the answer, so don't give them to the agent.
-- **Pin Hammer** to a commit before Cadence SKY130 support, with `.git` removed. Commit: `TODO`
+- **Use upstream Hammer** (`ucb-bar/hammer` master), per Jim. No pin. (The last commit before Cadence SKY130 support predates Hammer's Pegasus DRC/LVS plugin, so a pinned agent could never reach rungs 5–6.)
 - **No web access** for the agent.
 - **Don't commit** PDK files, logs, or tool outputs.
 - **Cap concurrent runs.** Machines and licenses are shared.
@@ -45,37 +45,48 @@ Work on `eda-#.eecs.berkeley.edu` in `/scratch/<your-login>` (not backed up, so 
 | Tool | Path | Version |
 | ---- | ---- | ------- |
 | Genus | `/share/instsww/cadence/GENUS231/bin/genus` | 23.18 (tested) |
-| Innovus | `/share/instsww/cadence/INNOVUS231/bin/innovus` | 23.1 (not yet tested) |
+| Innovus | `/share/instsww/cadence/INNOVUS231/bin/innovus` | 23.18 (tested: GCD place-and-route) |
 | Pegasus | `/share/instsww/cadence/PEGASUS-25.13.000/bin/pegasus` | 25.13 (tested) |
 
 PDKs are in `/home/ff/ee198/ee198-20/sky130_col/`: Cadence PDK `sky130_release_0.0.9`, std cells `sky130_scl_9T_0.1.2`, open PDK `open_pdks-2022.10`, SRAMs `sram22_sky130_macros`.
 
-## Plan (target: Oct 26)
+## Plan
 
-1. Run Hammer's GCD example on open SKY130 by hand (baseline)
-2. Get a skeleton CHIA loop running on eda-1 (agent node + Hammer node)
-3. Write the evaluate node (log condenser + ladder)
-4. Write the task spec; point the agent at rung 1
-5. Let it climb and record where it gets stuck
+| # | Step | Status |
+| - | ---- | ------ |
+| 1 | Run Hammer's GCD example on open SKY130 by hand (baseline) | ✅ Done: rungs 1–4 pass. See `baseline/NOTES.md` |
+| 2 | Get a skeleton CHIA loop running on eda-1 (agent node + Hammer node) | ✅ Done: working end to end. See `loop/README.md` |
+| 3 | Write the evaluate node (log condenser + ladder) | 🟡 In progress |
+| 4 | Write the task spec; point the agent at rung 1 | ⬜ Not started |
+| 5 | Let it climb and record where it gets stuck | ⬜ Waiting on 3 + 4 |
 
 ## Who's doing what
 
-| Area | Owner |
-| ---- | ----- |
-| Repo + environment | TODO |
-| Baseline GCD run | TODO |
-| CHIA loop skeleton | TODO |
-| Evaluate node | TODO |
-| Task spec + agent config | TODO |
+| Area | Owner | Status |
+| ---- | ----- | ------ |
+| Repo + environment | Nour | ✅ Done |
+| Baseline GCD run | Sid | ✅ Done (`baseline/`) |
+| CHIA loop skeleton | Sid | ✅ Done (`loop/`). Known-answer test passed |
+| Evaluate node | Nour | 🟡 In progress (log condenser). Must match `evaluate(obj_dir, run_result)` in `loop/eval_stub.py` |
+| Task spec + agent config | TBD | ⬜ Goes in `loop/prompts/task.md` |
 
 Claim a task in Slack before starting.
 
 ## Notes so far
 
 - CHIA is installed in `chia_env` on eda-1 and hello-world works.
-- CHIA's VLSI workers run directly on the host (no podman), so Hammer can see the Cadence tools, PDKs, and licenses. Podman is only for Chisel/Verilator workers.
-- CHIA's `HammerNode.run` needs a worker with a `hammer` resource in `cluster.yaml`.
-- Hammer is not installed yet; install upstream `ucb-bar/hammer`.
+- Hammer (upstream) is installed into `chia_env` with `pip install -e .`.
+- **How the loop is laid out** (details in `loop/README.md`):
+  - Hammer and the Cadence tools run directly on eda-1 (the head node).
+  - Claude runs in a podman container with no access to our files. It can only use a workspace tool that:
+    - reads and writes its own work folder
+    - reads the PDKs and Hammer's source
+    - refuses everything else
+- The head allows one flow run at a time (shared licenses).
+- The Claude container uses the login in `/scratch/cs199-aau/claude_config_dir/.claude`, which is a personal account. We should ask about a lab API key.
+- 2026-10-20: the license server (`license-srv:5280`) was unreachable from eda-1/eda-2 for one night. If Genus fails with `Cannot obtain … license`, it's an infrastructure problem, not our config.
 
 ## Open questions
-- What version string does the pinned Hammer expect for Pegasus 25.13 (likely `"2513"` or `"251"`)?
+- What version string does Hammer expect for Pegasus 25.13 (likely `"2513"` or `"251"`)?
+- Should the agent be able to read Hammer's built-in `sky130_cds` support? (Currently yes, since Jim said "use upstream". To hide it, add `"sky130_cds"` to `DENY_SUBSTRINGS` in `loop/config.py`.)
+- DRC/LVS on the open-PDK side: Magic/Netgen aren't installed on eda-1. Do we only score rungs 5–6 after migration, with Pegasus?
