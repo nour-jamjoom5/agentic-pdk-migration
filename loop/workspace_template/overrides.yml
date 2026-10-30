@@ -1,0 +1,4 @@
+# Agent-editable project overrides (passed last with -p, so they win).
+# Seed = open-PDK baseline: open DRC/LVS checkers instead of Calibre.
+vlsi.core.drc_tool: "hammer.drc.magic"
+vlsi.core.lvs_tool: "hammer.lvs.netgen"
