@@ -46,7 +46,11 @@ TOOL_LOGS = {"syn": "genus.log", "par": "innovus.log"}
 _ERR_LINE = re.compile(
     r"\*\*ERROR|^\s*Error\b|^ERROR\b|^\w+(Error|Exception)\b:|Cannot obtain .* license",
     re.IGNORECASE)
-_CODE = re.compile(r"\(([A-Z][A-Z0-9]+-\d+)\)")
+_CODE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
+# Innovus/Genus end-of-log message summary table, e.g.
+#   "ERROR     IMPSP-2002           1  Density too high (%.1f%%), ..."
+# It recaps counts of messages already reported above -- not an error occurrence.
+_SUMMARY_ROW = re.compile(r"^\s*(ERROR|WARNING|WARN|INFO)\s+[A-Z][A-Z0-9]+-\d+\s+\d+\s")
 
 
 def _read(path):
@@ -61,7 +65,7 @@ def _first_errors(text, limit=5, context=2):
     lines = text.splitlines()
     out = []
     for i, line in enumerate(lines):
-        if not _ERR_LINE.search(line):
+        if not _ERR_LINE.search(line) or _SUMMARY_ROW.match(line):
             continue
         m = _CODE.search(line)
         if m and m.group(1) in BENIGN_ERROR_CODES:
@@ -163,7 +167,7 @@ def evaluate(obj_dir: str, run_result: dict) -> dict:
             summary += " error_codes=" + ",".join(f"{c}x{n}" for c, n in sorted(new_codes.items()))
         if missing:
             summary += f" missing_outputs={missing[:5]}"
-        if first_errors:
+        if first_errors and status != "pass":
             summary += "\nfirst errors:\n" + "\n---\n".join(first_errors[:3])
 
     return {
@@ -171,7 +175,7 @@ def evaluate(obj_dir: str, run_result: dict) -> dict:
         "status": status,
         "failed_action": failed,
         "summary": summary,
-        "first_errors": first_errors,
+        "first_errors": first_errors if status != "pass" else [],
         "error_codes": new_codes,
         "benign_error_codes": {c: n for c, n in all_codes.items() if c in BENIGN_ERROR_CODES},
         "missing_artifacts": missing,
