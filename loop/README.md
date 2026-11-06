@@ -13,7 +13,8 @@ eda-1 HEAD (bare metal, chia_env, VLSI=1)                llm_1 (container, claud
 | `cluster.eda1.yaml` | Head (Hammer + Cadence tools, `VLSI: 1` = one flow run at a time) + `llm_1` Claude Code container |
 | `config.py` | Paths (Hammer e2e dir, runs dir, DB) and stage plan; override via `MIG_*` env vars |
 | `hammer_stage.py` | `run_stage(stage, workspace_dir, obj_dir)` — `@ChiaFunction` on `VLSI`, runs `syn` / `syn → syn-to-par → par` |
-| `eval_stub.py` | Placeholder evaluator (`evaluate(obj_dir, run) -> {rung, status, summary}`); replace with `evaluator/` |
+| `evaluator_adapter.py` | **Default evaluator.** Wraps Nour's `evaluator/` (repo root): runs her `evaluate_stage` per Hammer stage, maps it to rungs, filters the known-harmless error codes, and extracts the first real error lines for the agent. Re-score any build dir: `python evaluator_adapter.py <obj_dir>` |
+| `eval_stub.py` | Old placeholder evaluator; use with `MIG_EVALUATOR=stub` |
 | `db.py` | SQLite branch tree (`parent → child`), like `timing_opt/db.py` |
 | `migrate.py` | Driver: seed, then `--iterations N` agent passes until `--target-rung` |
 | `agent.py` | `agent_turn` — one Claude Code turn on `llm_1` (web tools disabled) |
@@ -45,4 +46,4 @@ Runs land in `/scratch/cs199-aau/pdk-migration/runs/<branch>/{workspace,build}` 
 2. ✅ verified — `--seed-only --stage par` reproduces the GCD baseline through CHIA: syn 38 s → syn-to-par → par 277 s, rung 4
 3. ✅ verified — `WorkspaceTool` (read/write workspace, read-only PDK roots, refuse everything else) + agent turn
 4. ✅ verified (2026-10-29) — loop on a known-answer task (break `sky130A` path in the template → agent fixes → rung 0→2)
-5. ⬜ real task spec + Nour's evaluator
+5. 🟡 Nour's evaluator wired in (`evaluator_adapter.py`) / ⬜ real task spec

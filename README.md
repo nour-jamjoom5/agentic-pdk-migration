@@ -56,7 +56,7 @@ PDKs are in `/home/ff/ee198/ee198-20/sky130_col/`: Cadence PDK `sky130_release_0
 | - | ---- | ------ |
 | 1 | Run Hammer's GCD example on open SKY130 by hand (baseline) | ✅ Done: rungs 1–4 pass. See `baseline/NOTES.md` |
 | 2 | Get a skeleton CHIA loop running on eda-1 (agent node + Hammer node) | ✅ Done: working end to end. See `loop/README.md` |
-| 3 | Write the evaluate node (log condenser + ladder) | 🟡 In progress |
+| 3 | Write the evaluate node (log condenser + ladder) | ✅ Done: `evaluator/` (Nour), connected to CHIA via `loop/evaluator_adapter.py` |
 | 4 | Write the task spec; point the agent at rung 1 | ⬜ Not started |
 | 5 | Let it climb and record where it gets stuck | ⬜ Waiting on 3 + 4 |
 
@@ -67,7 +67,7 @@ PDKs are in `/home/ff/ee198/ee198-20/sky130_col/`: Cadence PDK `sky130_release_0
 | Repo + environment | Nour | ✅ Done |
 | Baseline GCD run | Sid | ✅ Done (`baseline/`) |
 | CHIA loop skeleton | Sid | ✅ Done (`loop/`). Known-answer test passed |
-| Evaluate node | Nour | 🟡 In progress (log condenser). Must match `evaluate(obj_dir, run_result)` in `loop/eval_stub.py` |
+| Evaluate node | Nour (+ Sid: CHIA hookup) | ✅ Done. `evaluator/` + `loop/evaluator_adapter.py` |
 | Task spec + agent config | TBD | ⬜ Goes in `loop/prompts/task.md` |
 
 Claim a task in Slack before starting.

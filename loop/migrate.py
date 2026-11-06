@@ -31,7 +31,10 @@ from chia.base.ChiaFunction import get
 
 import config
 from db import MigrationDB
-from eval_stub import evaluate          # TODO: swap for Nour's evaluator (same interface)
+if os.environ.get("MIG_EVALUATOR", "nour") == "stub":
+    from eval_stub import evaluate                    # placeholder (no repo-root deps)
+else:
+    from evaluator_adapter import evaluate            # Nour's evaluator/ via the adapter
 from hammer_stage import run_stage
 
 HERE = Path(__file__).resolve().parent
@@ -110,7 +113,9 @@ def iterate(db, parent, stage, n, prompt_path, model, target_rung):
     prompt = Path(prompt_path).read_text().format(
         workspace_files="\n".join(sorted(os.listdir(ws))),
         stage=stage,
-        last_eval=json.dumps(json.loads(pb["eval_json"] or "{}").get("eval", {}), indent=2),
+        last_eval=json.dumps({k: v for k, v in
+                              json.loads(pb["eval_json"] or "{}").get("eval", {}).items()
+                              if k != "stages"}, indent=2),   # drop Nour's full per-stage dump
         log_tail=_log_tail(pb),
     )
     tool = WorkspaceTool(name="ws", workspace=ws,
