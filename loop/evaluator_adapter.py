@@ -130,9 +130,9 @@ def evaluate(obj_dir: str, run_result: dict) -> dict:
     if any(e["status"] == "infrastructure_failure" for e in stage_evals.values()) \
             or condense_log(driver_text)["infrastructure_failure"]:
         status = "infra_error"
-    elif run_result.get("ok") and stage_evals and \
-            all(e["status"] == "passed" for e in stage_evals.values()):
-        status = "pass"
+    elif run_result.get("ok") and (not stage_evals or
+                                   all(e["status"] == "passed" for e in stage_evals.values())):
+        status = "pass"      # (no syn/par stage = a "build" check: pass = Hammer ran clean)
     else:
         status = "fail"
 
