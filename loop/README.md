@@ -18,7 +18,9 @@ eda-1 HEAD (bare metal, chia_env, VLSI=1)                llm_1 (container, claud
 | `db.py` | SQLite branch tree (`parent → child`), like `timing_opt/db.py` |
 | `migrate.py` | Driver: seed, then `--iterations N` agent passes until `--target-rung` |
 | `agent.py` | `agent_turn` — one Claude Code turn on `llm_1` (web tools disabled) |
+| `flow_tool.py` | `FlowTool` (`flow_start` / `flow_status` / `flow_list_jobs` / `flow_cancel`): the agent runs `build` (seconds, rung 1), `syn` or `par` on a **snapshot** of its workspace mid-turn and gets the evaluator's summary back. Budget `--max-trial-runs` (default 10) per turn; runs queue on the head's single VLSI slot; never counts as the official score. Off with `--no-flow-tool` |
 | `workspace_tool.py` | `WorkspaceTool` MCP server on the head: r/w workspace, read-only PDK/Hammer roots, refuses everything else (symlink/`..`-safe) |
+| `two_faults_template/` | Flow-tool test: bad PDK path **and** bad Genus path; the second only shows up after the first is fixed |
 | `known_answer_template/`, `prompts/known_answer.md` | Milestone 4 test: seed with a broken `sky130A` path; the agent must fix it |
 | `smoke.py` | Milestone 1 health check (head tools/licenses + Claude in the container) |
 | `workspace_template/` | Seed workspace (agent-editable later): `env.yml` (`-e`), `overrides.yml` (`-p`, last) |
@@ -37,6 +39,10 @@ python migrate.py --list
 MIG_RUNS_DIR=/scratch/cs199-aau/pdk-migration/runs_ka python migrate.py \
     --template known_answer_template --prompt prompts/known_answer.md \
     --stage syn --iterations 3 --target-rung 2
+# flow-tool test (two sequential faults; expect both fixed in one agent turn)
+MIG_RUNS_DIR=/scratch/cs199-aau/pdk-migration/runs_2f python migrate.py \
+    --template two_faults_template --prompt prompts/known_answer.md \
+    --stage syn --iterations 3 --target-rung 2
 chia down cluster.eda1.yaml
 ```
 Runs land in `/scratch/cs199-aau/pdk-migration/runs/<branch>/{workspace,build}` (+ `migration.db`).
@@ -46,4 +52,5 @@ Runs land in `/scratch/cs199-aau/pdk-migration/runs/<branch>/{workspace,build}` 
 2. ✅ verified — `--seed-only --stage par` reproduces the GCD baseline through CHIA: syn 38 s → syn-to-par → par 277 s, rung 4
 3. ✅ verified — `WorkspaceTool` (read/write workspace, read-only PDK roots, refuse everything else) + agent turn
 4. ✅ verified (2026-10-29) — loop on a known-answer task (break `sky130A` path in the template → agent fixes → rung 0→2)
+4b. ⬜ FlowTool: agent fixes two sequential faults in ONE turn (`two_faults_template`)
 5. 🟡 Nour's evaluator wired in (`evaluator_adapter.py`) / ⬜ real task spec

@@ -28,6 +28,7 @@ WORKSPACE_CONFIGS = ["overrides.yml"]
 
 # Stage plan: hammer actions run in order; each stops the chain on failure.
 STAGES = {
+    "build": ["build"],          # loads Hammer + tech plugin only (seconds) -> rung 1
     "syn": ["syn"],
     "par": ["syn", "syn-to-par", "par"],
 }
@@ -44,6 +45,10 @@ READ_ONLY_ROOTS = [
     f"{SKY130_COL}/sram22_sky130_macros",
     os.path.join(os.path.dirname(HAMMER_E2E), "hammer"),   # Hammer python pkg + plugins
     HAMMER_E2E,                                    # e2e configs (read-only)
+    # Tool installs (to look up binaries / versions), read-only:
+    "/share/instsww/cadence/GENUS231",
+    "/share/instsww/cadence/INNOVUS231",
+    "/share/instsww/cadence/PEGASUS-25.13.000",
 ]
 # Substrings that are refused even inside allowed roots. Jim said "use upstream"
 # Hammer, so its sky130_cds code is NOT hidden by default; add "sky130_cds" here
@@ -51,4 +56,6 @@ READ_ONLY_ROOTS = [
 DENY_SUBSTRINGS = []
 
 LLM_MODEL = os.environ.get("MIG_LLM_MODEL", "claude-sonnet-4-6")
-LLM_TIMEOUT_S = int(os.environ.get("MIG_LLM_TIMEOUT_S", 3600))
+# Turns are longer now that the agent can run the flow itself (FlowTool).
+LLM_TIMEOUT_S = int(os.environ.get("MIG_LLM_TIMEOUT_S", 2 * 3600))
+MAX_TRIAL_RUNS = int(os.environ.get("MIG_MAX_TRIAL_RUNS", 10))   # FlowTool runs per agent turn

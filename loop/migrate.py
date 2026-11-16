@@ -18,6 +18,13 @@ Usage (on eda-1, after `chia up loop/cluster.eda1.yaml`):
     MIG_RUNS_DIR=/scratch/cs199-aau/pdk-migration/runs_ka python migrate.py \\
         --template known_answer_template --prompt prompts/known_answer.md \\
         --stage syn --iterations 3 --target-rung 2
+    # flow-tool test: two faults that only show up one after the other
+    # (bad PDK path breaks "build"; once fixed, a bad Genus path breaks "syn").
+    # With the flow tool the agent should fix both in ONE turn; with
+    # --no-flow-tool it needs two rounds.
+    MIG_RUNS_DIR=/scratch/cs199-aau/pdk-migration/runs_2f python migrate.py \\
+        --template two_faults_template --prompt prompts/known_answer.md \\
+        --stage syn --iterations 3 --target-rung 2
 """
 import argparse
 import json
@@ -97,18 +104,39 @@ def _log_tail(branch, n=60):
         return f"(could not read log: {e})"
 
 
-def iterate(db, parent, stage, n, prompt_path, model, target_rung):
-    """One parent -> child pass: stage child ws, agent edits it through the
-    sandboxed WorkspaceTool, driver re-runs the flow (authoritative), evaluate, record."""
+FLOW_HELP = """You can run the flow yourself with the `flow_*` tools (they run on a
+snapshot of your workspace and report rung, pass/fail and the first real errors):
+  flow_start("build") - seconds; checks Hammer + the tech plugin load (rung 1)
+  flow_start("syn")   - ~1 min; synthesis (rung 2)
+  flow_start("par")   - ~5 min; synthesis + place-and-route (rung 4)
+then poll flow_status(job_id). You have {max_runs} runs this turn, queued one at a time on
+shared licenses: check cheaply with "build" first, and fix errors one by one until
+the target stage passes. Open full logs with the ws read/grep tools when the summary
+is not enough. When you are done (or out of runs), end with a short summary; the
+loop then does the official run."""
+
+NO_FLOW_HELP = ("You cannot run the flow yourself this turn; it is re-run automatically "
+                "after you finish.")
+
+
+def iterate(db, parent, stage, n, prompt_path, model, target_rung,
+            use_flow_tool=True, max_trial_runs=None):
+    """One parent -> child pass: stage child ws; agent edits it through the sandboxed
+    WorkspaceTool and (optionally) tests its edits with FlowTool; driver re-runs the
+    flow (authoritative), evaluates, records."""
     from agent import agent_turn
+    from flow_tool import FlowTool
     from workspace_tool import WorkspaceTool
 
+    max_trial_runs = max_trial_runs or config.MAX_TRIAL_RUNS
     child = f"{parent.split('_v')[0]}_v{n}"
     while db.get(child):
         n += 1
         child = f"{parent.split('_v')[0]}_v{n}"
     pb = db.get(parent)
     ws, obj = stage_workspace(child, parent, db)
+    trials = str(Path(ws).parent / "trials")
+    os.makedirs(trials, exist_ok=True)
 
     prompt = Path(prompt_path).read_text().format(
         workspace_files="\n".join(sorted(os.listdir(ws))),
@@ -117,26 +145,43 @@ def iterate(db, parent, stage, n, prompt_path, model, target_rung):
                               json.loads(pb["eval_json"] or "{}").get("eval", {}).items()
                               if k != "stages"}, indent=2),   # drop Nour's full per-stage dump
         log_tail=_log_tail(pb),
+        flow_help=(FLOW_HELP.format(max_runs=max_trial_runs) if use_flow_tool
+                   else NO_FLOW_HELP),
     )
-    tool = WorkspaceTool(name="ws", workspace=ws,
-                         read_only_roots=config.READ_ONLY_ROOTS,
-                         deny_substrings=config.DENY_SUBSTRINGS,
-                         task_options={"resources": {"head_tools": 1}})
-    print(f"[{child}] agent turn (parent={parent}, rung={pb['rung']})")
+    tools = [WorkspaceTool(name="ws", workspace=ws,
+                           # the agent may also read its own trial runs' logs
+                           read_only_roots=config.READ_ONLY_ROOTS + [trials],
+                           deny_substrings=config.DENY_SUBSTRINGS,
+                           task_options={"resources": {"head_tools": 1}})]
+    if use_flow_tool:
+        tools.append(FlowTool(name="flow", workspace=ws, trials_dir=trials,
+                              max_runs=max_trial_runs,
+                              task_options={"resources": {"head_tools": 1}}))
+    print(f"[{child}] agent turn (parent={parent}, rung={pb['rung']}, "
+          f"flow_tool={'on, %d runs' % max_trial_runs if use_flow_tool else 'off'})")
     try:
-        turn = get(agent_turn.chia_remote(prompt, [tool], model, config.LLM_TIMEOUT_S,
+        turn = get(agent_turn.chia_remote(prompt, tools, model, config.LLM_TIMEOUT_S,
                                           f"mig_{child}"))
     finally:
-        tool.stop()
+        # Stopping the FlowTool server also tears down any trial run it still owns.
+        for t in tools:
+            t.stop()
     Path(ws).parent.joinpath("agent_reply.md").write_text(turn["result"])
-    print(f"[{child}] agent success={turn['success']}: {turn['result'][-600:]}")
+    trial_jobs = {}
+    if os.path.exists(os.path.join(trials, "jobs.json")):
+        trial_jobs = json.loads(Path(trials, "jobs.json").read_text())
+        for j, d in trial_jobs.items():
+            print(f"  trial {j}: stage={d['stage']:<5} state={d['state']:<17} "
+                  f"rung={d.get('rung')} status={d.get('status')}")
+    print(f"[{child}] agent success={turn['success']} trial_runs={len(trial_jobs)}: "
+          f"{turn['result'][-600:]}")
 
     db.add(child, parent, stage, ws, obj)
-    print(f"[{child}] running hammer stage '{stage}'")
+    print(f"[{child}] official run: hammer stage '{stage}'")
     run = get(run_stage.chia_remote(stage, ws, obj))
     ev = evaluate(obj, run)
-    db.finish(child, ev["status"], ev["rung"], {"run": run, "eval": ev},
-              agent_log=turn["result"])
+    db.finish(child, ev["status"], ev["rung"],
+              {"run": run, "eval": ev, "trials": trial_jobs}, agent_log=turn["result"])
     print(f"[{child}] {ev['summary']}")
     return ev
 
@@ -146,13 +191,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed-only", action="store_true")
     ap.add_argument("--force", action="store_true", help="re-run the seed")
-    ap.add_argument("--stage", choices=sorted(config.STAGES), default="syn")
+    ap.add_argument("--stage", choices=["syn", "par"], default="syn")
     ap.add_argument("--list", action="store_true", help="print the branch table and exit")
     ap.add_argument("--template", default=str(TEMPLATE),
                     help="seed workspace dir (e.g. known_answer_template for milestone 4)")
     ap.add_argument("--iterations", type=int, default=1)
     ap.add_argument("--prompt", default=str(HERE / "prompts" / "task.md"))
     ap.add_argument("--model", default=config.LLM_MODEL)
+    ap.add_argument("--no-flow-tool", action="store_true",
+                    help="agent can't run the flow itself (one blind edit per round)")
+    ap.add_argument("--max-trial-runs", type=int, default=config.MAX_TRIAL_RUNS,
+                    help="FlowTool runs the agent may start per turn")
     ap.add_argument("--target-rung", type=int, default=2,
                     help="stop once a branch reaches this rung (2 = syn, 4 = par)")
     ap.add_argument("--ray-address", default=os.environ.get("RAY_ADDRESS", "auto"))
@@ -168,7 +217,10 @@ def main():
         return 0
 
     ray.init(address=args.ray_address,
-             runtime_env={"working_dir": str(HERE), "excludes": ["__pycache__"]},
+             runtime_env={"working_dir": str(HERE), "excludes": ["__pycache__"],
+                          # Nour's evaluator/ lives at the repo root; ship it to workers
+                          # (FlowTool evaluates trial runs inside its server actor).
+                          "py_modules": [str(HERE.parent / "evaluator")]},
              ignore_reinit_error=True)
 
     TEMPLATE = Path(args.template)
@@ -184,7 +236,9 @@ def main():
             print(f"target rung {args.target_rung} reached by '{best['name']}' -- stopping")
             break
         ev = iterate(db, best["name"] if best else "seed", args.stage, i,
-                     args.prompt, args.model, args.target_rung)
+                     args.prompt, args.model, args.target_rung,
+                     use_flow_tool=not args.no_flow_tool,
+                     max_trial_runs=args.max_trial_runs)
         if ev["status"] == "infra_error":
             print("infra error (license/disk/timeout) -- stopping; rerun later")
             break
