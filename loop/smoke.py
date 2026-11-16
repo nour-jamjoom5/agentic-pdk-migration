@@ -22,7 +22,8 @@ def head_check() -> dict:
     import shutil
     import config
     paths = {
-        "hammer_bin": config.HAMMER_BIN,
+        "hammer_bin": config.HAMMER_BIN or os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_driver.py"),
+        "sky130_plugin_src": config.SKY130_PLUGIN_SRC,
         "genus": "/share/instsww/cadence/GENUS231/bin/genus",
         "innovus": "/share/instsww/cadence/INNOVUS231/bin/innovus",
         "open_pdk": "/home/ff/ee198/ee198-20/sky130_col/open_pdks-2022.10/share/pdk/sky130A",

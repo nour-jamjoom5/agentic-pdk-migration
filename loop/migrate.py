@@ -53,6 +53,29 @@ def _branch_dirs(name):
     return root / "workspace", root / "build"
 
 
+COMMON = HERE / "workspace_common"
+
+
+def _init_seed_workspace(ws):
+    """Extras every SEED workspace gets on top of its template (children inherit
+    them by copying the parent): hooks.py + WORKSPACE.md, and (if enabled) the
+    agent's own copy of the SKY130 tech plugin, selected in overrides.yml."""
+    ws = Path(ws)
+    for f in COMMON.iterdir():
+        if not (ws / f.name).exists():
+            shutil.copy(f, ws / f.name)
+    if config.AGENT_TECH_PLUGIN and not (ws / "agent_tech").exists():
+        shutil.copytree(config.SKY130_PLUGIN_SRC, ws / "agent_tech" / "sky130",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        (ws / "agent_tech" / "__init__.py").write_text("")
+        ov = ws / "overrides.yml"
+        text = ov.read_text() if ov.exists() else ""
+        if "vlsi.core.technology" not in text:
+            ov.write_text(text.rstrip("\n") + "\n\n# Use this workspace's own copy of the "
+                          "SKY130 tech plugin (agent_tech/sky130).\n"
+                          'vlsi.core.technology: "agent_tech.sky130"\n')
+
+
 def stage_workspace(name, parent=None, db=None):
     """Create <runs>/<name>/workspace as a copy of the parent's workspace
     (or the template for the seed). Returns (workspace_dir, obj_dir)."""
@@ -60,7 +83,9 @@ def stage_workspace(name, parent=None, db=None):
     if ws.parent.exists():
         shutil.rmtree(ws.parent)
     src = Path(db.get(parent)["workspace_dir"]) if parent else TEMPLATE
-    shutil.copytree(src, ws)
+    shutil.copytree(src, ws, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    if not parent:
+        _init_seed_workspace(ws)
     obj.mkdir(parents=True)
     return str(ws), str(obj)
 
@@ -147,6 +172,8 @@ def iterate(db, parent, stage, n, prompt_path, model, target_rung,
         log_tail=_log_tail(pb),
         flow_help=(FLOW_HELP.format(max_runs=max_trial_runs) if use_flow_tool
                    else NO_FLOW_HELP),
+        workspace_guide=(Path(ws, "WORKSPACE.md").read_text()
+                         if Path(ws, "WORKSPACE.md").exists() else ""),
     )
     tools = [WorkspaceTool(name="ws", workspace=ws,
                            # the agent may also read its own trial runs' logs

@@ -18,6 +18,9 @@ eda-1 HEAD (bare metal, chia_env, VLSI=1)                llm_1 (container, claud
 | `db.py` | SQLite branch tree (`parent → child`), like `timing_opt/db.py` |
 | `migrate.py` | Driver: seed, then `--iterations N` agent passes until `--target-rung` |
 | `agent.py` | `agent_turn` — one Claude Code turn on `llm_1` (web tools disabled) |
+| `agent_driver.py` | The Hammer driver every run uses (replaces `e2e/example-driver`): same thing, but its extra hooks come from the workspace's `hooks.py`. Not agent-editable |
+| `guard.py` | **Reference guard**, checked before every run (trial and official): blocks the run (`ERROR [guard]`) if any workspace file mentions an absolute path outside the allowed roots or a known reference-flow name. Needed because agent-written Python/Tcl runs on the head, outside the container. A tripwire, not a security boundary (it reads text) |
+| `workspace_common/` | Added to every seed workspace: `hooks.py` (starts as the baseline's hooks: remove `place_bumps`) and `WORKSPACE.md` (the agent's guide to its workspace; injected into the prompt as `{workspace_guide}`) |
 | `flow_tool.py` | `FlowTool` (`flow_start` / `flow_status` / `flow_list_jobs` / `flow_cancel`): the agent runs `build` (seconds, rung 1), `syn` or `par` on a **snapshot** of its workspace mid-turn and gets the evaluator's summary back. Budget `--max-trial-runs` (default 10) per turn; runs queue on the head's single VLSI slot; never counts as the official score. Off with `--no-flow-tool` |
 | `workspace_tool.py` | `WorkspaceTool` MCP server on the head: r/w workspace, read-only PDK/Hammer roots, refuses everything else (symlink/`..`-safe) |
 | `two_faults_template/` | Flow-tool test: bad PDK path **and** bad Genus path; the second only shows up after the first is fixed |
@@ -47,10 +50,14 @@ chia down cluster.eda1.yaml
 ```
 Runs land in `/scratch/cs199-aau/pdk-migration/runs/<branch>/{workspace,build}` (+ `migration.db`).
 
+## The agent's workspace (what it may edit)
+Each seed workspace = template (`env.yml`, `overrides.yml`) + `hooks.py` + `WORKSPACE.md` + **`agent_tech/sky130/`, the agent's own copy of Hammer's SKY130 tech plugin** (copied from the installed Hammer; selected by `vlsi.core.technology: "agent_tech.sky130"` in `overrides.yml`; settings keep their `technology.sky130.*` names). The agent may also add `configs/*.yml` (loaded after `overrides.yml`) and `tcl/` snippets for its hooks. `MIG_AGENT_TECH_PLUGIN=0` turns the plugin copy off.
+
 ## Milestones
 1. ✅ verified — cluster up, `smoke.py` passes, container can't see `/home/ff`
 2. ✅ verified — `--seed-only --stage par` reproduces the GCD baseline through CHIA: syn 38 s → syn-to-par → par 277 s, rung 4
 3. ✅ verified — `WorkspaceTool` (read/write workspace, read-only PDK roots, refuse everything else) + agent turn
 4. ✅ verified (2026-10-29) — loop on a known-answer task (break `sky130A` path in the template → agent fixes → rung 0→2)
 4b. ⬜ FlowTool: agent fixes two sequential faults in ONE turn (`two_faults_template`)
+4c. ⬜ Wider workspace (own tech plugin copy, hooks.py, configs/, guard): seed still reaches rung 4
 5. 🟡 Nour's evaluator wired in (`evaluator_adapter.py`) / ⬜ real task spec

@@ -6,8 +6,14 @@ import os
 # Hammer checkout on eda-1 (upstream ucb-bar/hammer, installed -e into chia_env)
 HAMMER_E2E = os.environ.get(
     "MIG_HAMMER_E2E", "/scratch/cs199-aau/pdk-migration/hammer/e2e")
-# The hammer CLI the stage node runs. e2e/example-driver = what the baseline used.
-HAMMER_BIN = os.environ.get("MIG_HAMMER_BIN", os.path.join(HAMMER_E2E, "example-driver"))
+# Hammer CLI the stage node runs. Default: loop/agent_driver.py (= e2e/example-driver,
+# but with hooks from the workspace's hooks.py). Set MIG_HAMMER_BIN to override.
+HAMMER_BIN = os.environ.get("MIG_HAMMER_BIN") or None
+HAMMER_SRC = os.path.join(os.path.dirname(HAMMER_E2E), "hammer")      # the hammer python pkg
+SKY130_PLUGIN_SRC = os.path.join(HAMMER_SRC, "technology", "sky130")  # upstream tech plugin
+# Give each seed workspace its own editable copy of the SKY130 tech plugin
+# (agent_tech/sky130, selected via vlsi.core.technology in overrides.yml).
+AGENT_TECH_PLUGIN = os.environ.get("MIG_AGENT_TECH_PLUGIN", "1") == "1"
 
 # Where every branch's workspace + build dir lives (on the head, /scratch is per-machine)
 RUNS_DIR = os.environ.get("MIG_RUNS_DIR", "/scratch/cs199-aau/pdk-migration/runs")
@@ -25,6 +31,9 @@ BASE_CONFIGS = [
 # Agent-editable workspace files. env.yml is passed with -e, the rest with -p, in this order.
 WORKSPACE_ENV = "env.yml"
 WORKSPACE_CONFIGS = ["overrides.yml"]
+# Plus every <workspace>/configs/*.yml (sorted), passed after overrides.yml, so the
+# agent can split its settings into extra files.
+WORKSPACE_EXTRA_CONFIG_DIR = "configs"
 
 # Stage plan: hammer actions run in order; each stops the chain on failure.
 STAGES = {
@@ -54,6 +63,13 @@ READ_ONLY_ROOTS = [
 # Hammer, so its sky130_cds code is NOT hidden by default; add "sky130_cds" here
 # if the team decides the agent shouldn't see it.
 DENY_SUBSTRINGS = []
+
+# ---- reference guard (guard.py): checked before every flow run ----
+# Names that must never appear in the workspace (known copies of the reference flow).
+GUARD_DENY_SUBSTRINGS = ["eecs151tapeout", "sky130_vlsi"]
+# Absolute paths the workspace MAY reference besides READ_ONLY_ROOTS and RUNS_DIR.
+GUARD_EXTRA_ALLOWED = ["/usr", "/bin", "/lib", "/lib64", "/tmp", "/dev/null",
+                       "/share/instsww/cadence", "/path/to"]
 
 LLM_MODEL = os.environ.get("MIG_LLM_MODEL", "claude-sonnet-4-6")
 # Turns are longer now that the agent can run the flow itself (FlowTool).
