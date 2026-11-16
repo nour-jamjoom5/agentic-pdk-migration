@@ -8,6 +8,7 @@ Rules:
 - Use only the `ws_*` tools (and `flow_*` if you have them). Call `ws_allowed_roots` first to see where you may look.
 - You can only write inside your workspace.
 - {flow_help}
+- Before you finish, confirm your fix with the flow tools: run flow_start("build"), then flow_start("{stage}"), and poll flow_status until it passes. If it fails, fix and rerun. Only finish once the requested stage passes.
 - End with a short summary of what you changed and why.
 
 Workspace files:
